@@ -16,6 +16,11 @@ public class SalesforceProxyController {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    @GetMapping("/health")
+    public ResponseEntity<?> health() {
+        return ResponseEntity.ok(Map.of("status", "UP"));
+    }
+
     @PostMapping("/auth/token")
     public ResponseEntity<?> exchangeToken(@RequestBody Map<String, String> body) {
         String code = body.get("code");
