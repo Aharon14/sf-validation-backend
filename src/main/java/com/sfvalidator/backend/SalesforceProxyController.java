@@ -6,6 +6,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 
 import java.util.Map;
 
@@ -14,7 +16,9 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class SalesforceProxyController {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = new RestTemplate(
+        new HttpComponentsClientHttpRequestFactory(HttpClients.createDefault())
+    );
 
     @GetMapping("/health")
     public ResponseEntity<?> health() {
@@ -40,7 +44,7 @@ public class SalesforceProxyController {
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(
-                    loginUrl + "/services/oauth2/token", request, Map.class);
+                loginUrl + "/services/oauth2/token", request, Map.class);
             return ResponseEntity.ok(response.getBody());
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
@@ -55,10 +59,10 @@ public class SalesforceProxyController {
         String soql = "SELECT Id, ValidationName, Active, Description, ErrorMessage, ErrorDisplayField, NamespacePrefix FROM ValidationRule WHERE EntityDefinition.QualifiedApiName = 'Account' ORDER BY ValidationName ASC";
 
         String url = UriComponentsBuilder
-                .fromHttpUrl(instanceUrl + "/services/data/v59.0/tooling/query")
-                .queryParam("q", soql)
-                .build()
-                .toUriString();
+            .fromHttpUrl(instanceUrl + "/services/data/v59.0/tooling/query")
+            .queryParam("q", soql)
+            .build()
+            .toUriString();
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
@@ -80,7 +84,6 @@ public class SalesforceProxyController {
             @RequestHeader("X-SF-Instance") String instanceUrl,
             @RequestBody Map<String, Object> body) {
 
-        // ✅ FIXED: added ?fields=Metadata so Salesforce returns the full Metadata object
         String getUrl = instanceUrl + "/services/data/v59.0/tooling/sobjects/ValidationRule/" + ruleId + "?fields=Metadata";
 
         HttpHeaders headers = new HttpHeaders();
@@ -89,19 +92,18 @@ public class SalesforceProxyController {
         HttpEntity<Void> getRequest = new HttpEntity<>(headers);
 
         try {
-                    onseEntity<Map> getResponse = restTemplate.exchange(
+            ResponseEntity<Map> getResponse = restTemplate.exchange(
                 getUrl, HttpMethod.GET, getRequest, Map.class);
 
             Map<String, Object> ruleData = getResponse.getBody();
             Map<String, Object> metadata = (Map<String, Object>) ruleData.get("Metadata");
 
             if (metadata == null) {
-                    return ResponseEntity.status(400).body(Map.of("error", "Metadata not found for rule: " + ruleId));
+                return ResponseEntity.status(400).body(Map.of("error", "Metadata not found for rule: " + ruleId));
             }
 
             metadata.put("active", body.get("active"));
 
-            // Use URL without ?fields=Metadata for the PATCH request
             String patchUrl = instanceUrl + "/services/data/v59.0/tooling/sobjects/ValidationRule/" + ruleId;
             HttpEntity<Map<String, Object>> patchRequest = new HttpEntity<>(
                 Map.of("Metadata", metadata), headers);
@@ -116,8 +118,8 @@ public class SalesforceProxyController {
     @GetMapping("/userinfo")
     public ResponseEntity<?> getUserInfo(
             @RequestHeader("X-SF-Token") String accessToken,
-                    uestHeader("X-SF-Instance") String instanc
-                    
+            @RequestHeader("X-SF-Instance") String instanceUrl) {
+
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
         HttpEntity<Void> request = new HttpEntity<>(headers);
