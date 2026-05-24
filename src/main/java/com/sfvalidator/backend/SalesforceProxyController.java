@@ -40,7 +40,7 @@ public class SalesforceProxyController {
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(
-                loginUrl + "/services/oauth2/token", request, Map.class);
+                    loginUrl + "/services/oauth2/token", request, Map.class);
             return ResponseEntity.ok(response.getBody());
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
@@ -55,10 +55,10 @@ public class SalesforceProxyController {
         String soql = "SELECT Id, ValidationName, Active, Description, ErrorMessage, ErrorDisplayField, NamespacePrefix FROM ValidationRule WHERE EntityDefinition.QualifiedApiName = 'Account' ORDER BY ValidationName ASC";
 
         String url = UriComponentsBuilder
-            .fromHttpUrl(instanceUrl + "/services/data/v59.0/tooling/query")
-            .queryParam("q", soql)
-            .build()
-            .toUriString();
+                .fromHttpUrl(instanceUrl + "/services/data/v59.0/tooling/query")
+                .queryParam("q", soql)
+                .build()
+                .toUriString();
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
@@ -80,7 +80,8 @@ public class SalesforceProxyController {
             @RequestHeader("X-SF-Instance") String instanceUrl,
             @RequestBody Map<String, Object> body) {
 
-        String getUrl = instanceUrl + "/services/data/v59.0/tooling/sobjects/ValidationRule/" + ruleId;
+        // ✅ FIXED: added ?fields=Metadata so Salesforce returns the full Metadata object
+        String getUrl = instanceUrl + "/services/data/v59.0/tooling/sobjects/ValidationRule/" + ruleId + "?fields=Metadata";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
@@ -88,16 +89,23 @@ public class SalesforceProxyController {
         HttpEntity<Void> getRequest = new HttpEntity<>(headers);
 
         try {
-            ResponseEntity<Map> getResponse = restTemplate.exchange(
+                    onseEntity<Map> getResponse = restTemplate.exchange(
                 getUrl, HttpMethod.GET, getRequest, Map.class);
 
             Map<String, Object> ruleData = getResponse.getBody();
             Map<String, Object> metadata = (Map<String, Object>) ruleData.get("Metadata");
+
+            if (metadata == null) {
+                    return ResponseEntity.status(400).body(Map.of("error", "Metadata not found for rule: " + ruleId));
+            }
+
             metadata.put("active", body.get("active"));
 
+            // Use URL without ?fields=Metadata for the PATCH request
+            String patchUrl = instanceUrl + "/services/data/v59.0/tooling/sobjects/ValidationRule/" + ruleId;
             HttpEntity<Map<String, Object>> patchRequest = new HttpEntity<>(
                 Map.of("Metadata", metadata), headers);
-            restTemplate.exchange(getUrl, HttpMethod.PATCH, patchRequest, Void.class);
+            restTemplate.exchange(patchUrl, HttpMethod.PATCH, patchRequest, Void.class);
             return ResponseEntity.ok(Map.of("success", true));
 
         } catch (Exception e) {
@@ -108,8 +116,8 @@ public class SalesforceProxyController {
     @GetMapping("/userinfo")
     public ResponseEntity<?> getUserInfo(
             @RequestHeader("X-SF-Token") String accessToken,
-            @RequestHeader("X-SF-Instance") String instanceUrl) {
-
+                    uestHeader("X-SF-Instance") String instanc
+                    
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
         HttpEntity<Void> request = new HttpEntity<>(headers);
